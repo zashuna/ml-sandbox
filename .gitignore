@@ -1,1 +1,6 @@
 .python-version
+
+# Data files
+MNIST/data/*
+
+*__pycache__*
