@@ -1,8 +1,8 @@
 import csv
 
 cheq_acct_file = '/STORAGE/cpb/data/CustomersInBothSecondaryAndSample.txt'
-secondary_csv_file = open('/STORAGE/cpb/data/cheqSecondarySummary.csv', 'r', newline='')
-secondary_csv_file_sample = open('/STORAGE/cpb/data/cheqSecondarySummary.csv', 'w', newline='')
+secondary_csv_file = open('/STORAGE/cpb/data/cheqSecondarySummary-Jahir-v8.csv', 'r', newline='')
+secondary_csv_file_sample = open('/STORAGE/cpb/data/cheqSecondarySummary-Jahir-v8-sample.csv', 'w', newline='')
 
 sample_writer = csv.writer(secondary_csv_file_sample, delimiter=',')
 secondary_reader = csv.reader(secondary_csv_file)
