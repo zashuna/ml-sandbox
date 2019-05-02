@@ -13,7 +13,7 @@ with open(cheq_acct_file, 'r') as f:
         cheq_accts.add(line.strip())
 
 for row in secondary_reader:
-    if row[0] in cheq_accts:
+    if row[0].strip() in cheq_accts:
         sample_writer.writerow(row)
 
 secondary_csv_file_sample.close()
