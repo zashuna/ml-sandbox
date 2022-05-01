@@ -1,12 +1,44 @@
 import csv
 import numpy as np
 import torch
+from torch import nn
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
 SEED = 2022
 torch.manual_seed(SEED)
+
+
+class FeedForwardNet(nn.Module):
+    """
+    Simple feed forward neural net.
+    """
+
+    def __init__(self, n_features, n_output):
+
+        super(FeedForwardNet, self).__init__()
+        self.n_features = n_features
+        self.n_hid = self.n_features * 2
+        self.n_output = n_output
+
+        self.hid = nn.Linear(self.n_features, self.n_hid)
+        self.output = nn.Linear(self.n_hid, self.n_output)
+
+    def forward(self, input, labels=None):
+        """
+        input: tensor of inputs, of [batch_size, n_features]
+        """
+
+        logits = self.hid(input)
+        logits = self.output(logits)
+        if labels is not None:
+            loss_fct = nn.CrossEntropyLoss()
+            return loss_fct(logits, labels)
+        else:
+            return logits
 
 
 def extract_data(filename):
@@ -60,12 +92,63 @@ def preprocess(train_features, test_features):
     return train_features, test_features
 
 
-def build_nn(train_features, train_labels):
+def train_nn(nn, train_features, train_labels, n_epochs=25):
     """
-    Build and train a simple feed forward neural network for binary classification.
+    Train the NN model and batch the data.
     """
 
-    pass
+    batch_size = 8
+    train_features = torch.tensor(train_features, dtype=torch.double)
+    train_labels = torch.tensor(train_labels, dtype=torch.long)
+    train_dataset = TensorDataset(train_features, train_labels)
+    train_sampler = RandomSampler(train_dataset)
+    train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=batch_size)
+    optimizer = torch.optim.SGD(nn.parameters(), lr=0.01)
+    optimizer.zero_grad()
+
+    nn.train()
+    for epoch in range(n_epochs):
+        for batch in train_dataloader:
+            data, labels = batch
+            loss = nn(data, labels)
+
+            # update the model parameters
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+
+        print(f'Finished training epoch {epoch}')
+
+    return nn
+
+
+def predictions_nn(nn, test_features):
+    """
+    Generate the models predictions for the NN model.
+    """
+
+    batch_size = 8
+    test_features = torch.tensor(test_features, dtype=torch.double)
+    test_dataset = TensorDataset(test_features)
+    test_sampler = SequentialSampler(test_dataset)
+    test_dataloader = DataLoader(test_dataset, sampler=test_sampler, batch_size=batch_size)
+    softmax = nn.Softmax(dim=1)
+    preds, probs = [], []
+
+    nn.eval()
+    for batch in test_dataloader:
+        with torch.no_grad():
+            logits = nn(batch)
+            batch_probs = softmax(logits)
+
+        batch_preds = np.argmax(logits.numpy(), axis=1).tolist()
+        batch_probs = batch_probs.numpy()
+        preds.extend(batch_preds)
+        probs.append(batch_probs)
+
+    preds = np.array(preds)
+    probs = np.concatenate(probs, axis=0)
+    return preds, probs
 
 
 def evaluate(predictions, test_labels):
@@ -73,8 +156,15 @@ def evaluate(predictions, test_labels):
     Compute evaluation metrics on the test set.
     """
 
-    pass
+    predicted_labels = predictions['predicted_labels']
+    predicted_probs = predictions['predicted_probs']
 
+    precision = precision_score(test_labels, predicted_labels)
+    recall = recall_score(test_labels, predicted_labels)
+    f1 = f1_score(test_labels, predicted_labels)
+    auc = roc_auc_score(test_labels, predicted_probs[:, 1])
+
+    return precision, recall, f1, auc
 
 def main():
     """
@@ -97,4 +187,20 @@ def main():
     predictions['lr']['predicted_labels'] = lr.predict(test_features)
     predictions['lr']['predicted_probs'] = lr.predict_proba(test_features)
 
-    nn = build_nn(train_features, train_labels)
+    nn = FeedForwardNet(train_features.shape[1], 2)
+    nn = train_nn(nn, train_features, train_labels)
+    nn_preds, nn_probs = predictions_nn(nn, test_features)
+    predictions['nn']['predicted_labels'] = nn_preds
+    predictions['nn']['predicted_probs'] = nn_probs
+
+    # Perform evaluation.
+    print('Performing model evaluation')
+    models = ['svm', 'lr', 'nn']
+    for model in models:
+        precision, recall, f1, auc = evaluate(predictions[model], test_labels)
+        print(f'For {model}:')
+        print(f'Precision: {precision}')
+        print(f'Recall: {recall}')
+        print(f'F1: {f1}')
+        print(f'AUC: {auc}')
+        print('---------------------------------------')
