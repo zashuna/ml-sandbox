@@ -1,3 +1,4 @@
+import pdb
 import csv
 import numpy as np
 import torch
@@ -51,13 +52,18 @@ def extract_data(filename):
 
     with open(filename) as f:
         reader = csv.reader(f, quotechar='"', delimiter=';')
+        first_line = False
         for row in reader:
+            if not first_line:
+                first_line = True
+                continue
+
             score = int(row[-1])
             # binarize the labels
             if score < 5:
                 labels.append(0)
                 n_neg += 1
-            elif score > 5:
+            elif score > 6:
                 labels.append(1)
                 n_pos += 1
             else:
@@ -92,25 +98,25 @@ def preprocess(train_features, test_features):
     return train_features, test_features
 
 
-def train_nn(nn, train_features, train_labels, n_epochs=25):
+def train_nn(nn_model, train_features, train_labels, n_epochs=25):
     """
     Train the NN model and batch the data.
     """
 
     batch_size = 8
-    train_features = torch.tensor(train_features, dtype=torch.double)
+    train_features = torch.tensor(train_features, dtype=torch.float)
     train_labels = torch.tensor(train_labels, dtype=torch.long)
     train_dataset = TensorDataset(train_features, train_labels)
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=batch_size)
-    optimizer = torch.optim.SGD(nn.parameters(), lr=0.01)
+    optimizer = torch.optim.SGD(nn_model.parameters(), lr=0.01)
     optimizer.zero_grad()
 
-    nn.train()
+    nn_model.train()
     for epoch in range(n_epochs):
         for batch in train_dataloader:
             data, labels = batch
-            loss = nn(data, labels)
+            loss = nn_model(data, labels)
 
             # update the model parameters
             loss.backward()
@@ -119,26 +125,26 @@ def train_nn(nn, train_features, train_labels, n_epochs=25):
 
         print(f'Finished training epoch {epoch}')
 
-    return nn
+    return nn_model
 
 
-def predictions_nn(nn, test_features):
+def predictions_nn(nn_model, test_features):
     """
     Generate the models predictions for the NN model.
     """
 
     batch_size = 8
-    test_features = torch.tensor(test_features, dtype=torch.double)
+    test_features = torch.tensor(test_features, dtype=torch.float)
     test_dataset = TensorDataset(test_features)
     test_sampler = SequentialSampler(test_dataset)
     test_dataloader = DataLoader(test_dataset, sampler=test_sampler, batch_size=batch_size)
     softmax = nn.Softmax(dim=1)
     preds, probs = [], []
 
-    nn.eval()
+    nn_model.eval()
     for batch in test_dataloader:
         with torch.no_grad():
-            logits = nn(batch)
+            logits = nn_model(batch[0])
             batch_probs = softmax(logits)
 
         batch_preds = np.argmax(logits.numpy(), axis=1).tolist()
@@ -166,6 +172,7 @@ def evaluate(predictions, test_labels):
 
     return precision, recall, f1, auc
 
+
 def main():
     """
     Main function that trains, performs inference, and evaluates performance.
@@ -177,7 +184,7 @@ def main():
 
     predictions = {'svm': dict(), 'lr': dict(), 'nn': dict()}
     # Model training and inference.
-    svm = SVC()
+    svm = SVC(probability=True)
     svm.fit(train_features, train_labels)
     predictions['svm']['predicted_labels'] = svm.predict(test_features)
     predictions['svm']['predicted_probs'] = svm.predict_proba(test_features)
@@ -187,9 +194,9 @@ def main():
     predictions['lr']['predicted_labels'] = lr.predict(test_features)
     predictions['lr']['predicted_probs'] = lr.predict_proba(test_features)
 
-    nn = FeedForwardNet(train_features.shape[1], 2)
-    nn = train_nn(nn, train_features, train_labels)
-    nn_preds, nn_probs = predictions_nn(nn, test_features)
+    nn_model = FeedForwardNet(train_features.shape[1], 2)
+    nn_model = train_nn(nn_model, train_features, train_labels)
+    nn_preds, nn_probs = predictions_nn(nn_model, test_features)
     predictions['nn']['predicted_labels'] = nn_preds
     predictions['nn']['predicted_probs'] = nn_probs
 
@@ -204,3 +211,8 @@ def main():
         print(f'F1: {f1}')
         print(f'AUC: {auc}')
         print('---------------------------------------')
+
+
+if __name__ == '__main__':
+
+    main()
