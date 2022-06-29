@@ -185,12 +185,12 @@ def main():
     predictions = {'svm': dict(), 'lr': dict(), 'nn': dict()}
     # Model training and inference.
     svm = SVC(probability=True)
-    svm.fit(train_features, train_labels)
+    svm = svm.fit(train_features, train_labels)
     predictions['svm']['predicted_labels'] = svm.predict(test_features)
     predictions['svm']['predicted_probs'] = svm.predict_proba(test_features)
 
     lr = LogisticRegression()
-    lr.fit(train_features, train_labels)
+    lr = lr.fit(train_features, train_labels)
     predictions['lr']['predicted_labels'] = lr.predict(test_features)
     predictions['lr']['predicted_probs'] = lr.predict_proba(test_features)
 
